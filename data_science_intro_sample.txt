@@ -1,0 +1,4 @@
+Data Science Intro
+
+Data science combines statistics, machine learning, and domain context to create value from data.
+The lifecycle includes problem framing, data collection, cleaning, modeling, evaluation, and deployment.

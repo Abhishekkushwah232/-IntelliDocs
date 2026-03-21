@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1774071810816,
+      "tag": "0000_white_marauders",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774072228772,
+      "tag": "0001_charming_hedge_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774100000000,
+      "tag": "0002_documents_mime_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774100100000,
+      "tag": "0003_documents_content",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774100200000,
+      "tag": "0004_documents_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774100300000,
+      "tag": "0005_messages_user_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774100400000,
+      "tag": "0006_messages_meta",
+      "breakpoints": true
+    }
+  ]
+}

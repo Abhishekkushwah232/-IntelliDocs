@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# IntelliDocs Demo
 
-## Getting Started
+A document-aware chat application built with Next.js, Supabase Auth, Postgres, and Drizzle ORM.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Email/password authentication via Supabase
+- User-scoped conversations, message history, and stats
+- TXT/PDF upload with extracted text stored for chat context
+- Gemini integration with safe demo fallback mode
+- Drizzle migrations and SQL repair scripts for schema drift
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Next.js 16 (App Router)
+- React 19 + TypeScript
+- Supabase Auth
+- Postgres + Drizzle ORM
+- Tailwind CSS
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Prerequisites
 
-## Learn More
+- Node.js `>= 20.9.0`
+- A Supabase project
+- Environment variables in `.env`
 
-To learn more about Next.js, take a look at the following resources:
+Required variables:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `DATABASE_URL`
+- `DIRECT_URL` (recommended for migrations)
+- `GEMINI_API_KEY` (optional; app works in demo fallback mode without it)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Local Development
 
-## Deploy on Vercel
+1. Install dependencies
+   - `npm install`
+2. Run migrations
+   - `npm run db:migrate`
+3. Start dev server
+   - `npm run dev`
+4. Open [http://localhost:3000](http://localhost:3000)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Production Validation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Run this before deploying:
+
+1. `npm run lint`
+2. `npm run build`
+3. `npm run start`
+
+If `next start` says no production build exists, run `npm run build` first.
+
+## User Isolation Test
+
+Automated data-isolation validation (User A vs User B):
+
+1. Set test user env vars in your shell:
+   - `TEST_USER_A_EMAIL`
+   - `TEST_USER_A_PASSWORD`
+   - `TEST_USER_B_EMAIL`
+   - `TEST_USER_B_PASSWORD`
+2. Ensure app is running locally at `http://localhost:3000`
+3. Run:
+   - `npm run test:isolation`
+
+Pass criteria:
+
+- Script ends with `Isolation test completed successfully.`
+- No `FAIL:` lines are printed
+
+## Deployment Notes
+
+- Do not commit `.env` files
+- Ensure production environment variables are set in your hosting provider
+- Keep DB schema aligned with `src/db/schema.ts` and Drizzle migrations
+
+## Scripts
+
+- `npm run dev` - start development server
+- `npm run build` - create production build
+- `npm run start` - run production server
+- `npm run lint` - run ESLint
+- `npm run db:generate` - generate Drizzle migration
+- `npm run db:migrate` - preflight check + apply migrations
+- `npm run test:isolation` - run two-user data isolation checks
