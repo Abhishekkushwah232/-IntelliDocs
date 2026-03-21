@@ -7,6 +7,31 @@ import { useRouter } from "next/navigation";
 
 type Mode = "login" | "register";
 
+function toFriendlyAuthError(message: string, mode: Mode) {
+  const m = message.toLowerCase();
+
+  if (mode === "register") {
+    if (
+      m.includes("already registered")
+      || m.includes("already exists")
+      || m.includes("user already")
+    ) {
+      return "This email is already registered. Please sign in instead.";
+    }
+  }
+
+  if (mode === "login") {
+    if (m.includes("invalid login credentials")) {
+      return "Invalid login credentials. If you just signed up, verify your email first, then sign in.";
+    }
+    if (m.includes("email not confirmed")) {
+      return "Please verify your email first, then sign in.";
+    }
+  }
+
+  return message;
+}
+
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -45,7 +70,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
           options: emailRedirectTo ? { emailRedirectTo } : undefined,
         });
         if (error) {
-          setError(error.message);
+          setError(toFriendlyAuthError(error.message, mode));
+        } else if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          // Supabase may mask duplicate users by returning a user with empty identities.
+          setError("This email is already registered. Please sign in instead.");
         } else if (data.session) {
           // Email-confirmation disabled: signed in immediately.
           router.replace("/dashboard");
@@ -60,7 +88,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       }
 
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
+      if (error) setError(toFriendlyAuthError(error.message, mode));
       else router.replace("/dashboard");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
