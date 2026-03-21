@@ -22,7 +22,12 @@ function toFriendlyAuthError(message: string, mode: Mode) {
 
   if (mode === "login") {
     if (m.includes("invalid login credentials")) {
-      return "Invalid login credentials. If you just signed up, verify your email first, then sign in.";
+      const verificationHint =
+        typeof window !== "undefined" && window.sessionStorage.getItem("pending_email_verification") === "1";
+      if (verificationHint) {
+        return "Invalid login credentials. If you just signed up, verify your email first, then sign in.";
+      }
+      return "Invalid login credentials. Please check your email and password.";
     }
     if (m.includes("email not confirmed")) {
       return "Please verify your email first, then sign in.";
@@ -44,6 +49,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     if (mode !== "login" || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("verified") === "1") {
+      window.sessionStorage.removeItem("pending_email_verification");
       setNotice("Email verified. You can sign in now.");
     }
   }, [mode]);
@@ -76,9 +82,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
           setError("This email is already registered. Please sign in instead.");
         } else if (data.session) {
           // Email-confirmation disabled: signed in immediately.
+          if (typeof window !== "undefined") {
+            window.sessionStorage.removeItem("pending_email_verification");
+          }
           router.replace("/dashboard");
         } else {
           // Email-confirmation enabled: keep user on auth flow.
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem("pending_email_verification", "1");
+          }
           setNotice(
             "Account created. Check your email for verification, then sign in.",
           );
