@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,14 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (mode !== "login" || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("verified") === "1") {
+      setNotice("Email verified. You can sign in now.");
+    }
+  }, [mode]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -26,7 +34,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
         // Avoid carrying over an existing session when creating a new account.
         await supabase.auth.signOut();
 
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const emailRedirectTo =
+          typeof window !== "undefined"
+            ? `${window.location.origin}/login?verified=1`
+            : undefined;
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: emailRedirectTo ? { emailRedirectTo } : undefined,
+        });
         if (error) {
           setError(error.message);
         } else if (data.session) {
@@ -35,7 +52,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         } else {
           // Email-confirmation enabled: keep user on auth flow.
           setNotice(
-            "Account created. Please confirm your email, then sign in.",
+            "Account created. Check your email for verification, then sign in.",
           );
           router.replace("/login");
         }
