@@ -33,9 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <AppSidebar mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col">
           <MobileHeader title={title} onMenuClick={() => setMobileOpen(true)} />
-          <div className="flex-1 overflow-auto p-4 md:p-8 lg:p-10">
-            <div className="mx-auto w-full max-w-6xl">{children}</div>
-          </div>
+          <main className="scrollbar-soft flex-1 overflow-auto">{children}</main>
         </div>
       </div>
     </SessionGate>

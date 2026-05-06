@@ -18,6 +18,9 @@ function toFriendlyAuthError(message: string, mode: Mode) {
     ) {
       return "This email is already registered. Please sign in instead.";
     }
+    if (m.includes("password should be at least")) {
+      return "Password is too short. Use at least 6 characters.";
+    }
   }
 
   if (mode === "login") {
@@ -41,6 +44,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,7 +66,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
     try {
       if (mode === "register") {
-        // Avoid carrying over an existing session when creating a new account.
         await supabase.auth.signOut();
 
         const emailRedirectTo =
@@ -78,21 +81,18 @@ export function AuthForm({ mode }: { mode: Mode }) {
         if (error) {
           setError(toFriendlyAuthError(error.message, mode));
         } else if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-          // Supabase may mask duplicate users by returning a user with empty identities.
           setError("This email is already registered. Please sign in instead.");
         } else if (data.session) {
-          // Email-confirmation disabled: signed in immediately.
           if (typeof window !== "undefined") {
             window.sessionStorage.removeItem("pending_email_verification");
           }
           router.replace("/dashboard");
         } else {
-          // Email-confirmation enabled: keep user on auth flow.
           if (typeof window !== "undefined") {
             window.sessionStorage.setItem("pending_email_verification", "1");
           }
           setNotice(
-            "Account created. Check your email for verification, then sign in.",
+            "Account created. Check your email for the verification link, then return to sign in.",
           );
           router.replace("/login");
         }
@@ -110,70 +110,102 @@ export function AuthForm({ mode }: { mode: Mode }) {
     }
   }
 
+  const ctaLabel = mode === "login" ? "Sign in" : "Create account";
+
   return (
     <form
       onSubmit={onSubmit}
-      className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
+      className="flex w-full flex-col gap-5 rounded-2xl border border-slate-200/80 bg-white/95 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur sm:p-7"
     >
-      <h1 className="text-xl font-semibold">
-        {mode === "login" ? "Sign in" : "Create account"}
-      </h1>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-zinc-600">Email</span>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Email
+        </span>
         <input
-          className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm transition focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
           required
           autoComplete="email"
         />
       </label>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-sm text-zinc-600">Password</span>
-        <input
-          className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete={mode === "register" ? "new-password" : "current-password"}
-        />
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Password
+        </span>
+        <div className="relative">
+          <input
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-20 text-sm transition focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={mode === "register" ? "At least 6 characters" : "Your password"}
+            required
+            minLength={mode === "register" ? 6 : undefined}
+            autoComplete={mode === "register" ? "new-password" : "current-password"}
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute inset-y-0 right-2 my-auto h-7 rounded-md px-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
       </label>
 
       {error ? (
-        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
+        <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+          <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008Zm9.75-1.5a9.75 9.75 0 1 1-19.5 0 9.75 9.75 0 0 1 19.5 0Z" />
+          </svg>
+          <span>{error}</span>
         </div>
       ) : null}
+
       {notice ? (
-        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {notice}
+        <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+          <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+          <span>{notice}</span>
         </div>
       ) : null}
 
       <button
         type="submit"
         disabled={loading}
-        className="mt-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60 hover:bg-zinc-800"
+        className="group relative mt-1 inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-wait disabled:opacity-70"
       >
-        {loading ? "Please wait..." : mode === "login" ? "Sign in" : "Sign up"}
+        {loading ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            Please wait…
+          </>
+        ) : (
+          <>
+            {ctaLabel}
+            <span className="transition group-hover:translate-x-0.5" aria-hidden>→</span>
+          </>
+        )}
       </button>
 
-      <div className="pt-1 text-center text-sm text-zinc-600">
+      <div className="text-center text-sm text-slate-600">
         {mode === "login" ? (
           <>
             Don&apos;t have an account?{" "}
-            <Link className="font-medium text-black hover:underline" href="/register">
-              Create account
+            <Link className="font-semibold text-indigo-600 hover:text-indigo-700" href="/register">
+              Create one
             </Link>
           </>
         ) : (
           <>
             Already have an account?{" "}
-            <Link className="font-medium text-black hover:underline" href="/login">
+            <Link className="font-semibold text-indigo-600 hover:text-indigo-700" href="/login">
               Sign in
             </Link>
           </>
@@ -182,4 +214,3 @@ export function AuthForm({ mode }: { mode: Mode }) {
     </form>
   );
 }
-
