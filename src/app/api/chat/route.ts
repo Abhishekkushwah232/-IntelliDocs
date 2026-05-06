@@ -24,8 +24,8 @@ async function generateAssistantReply(params: {
   contextFilename?: string | null;
 }): Promise<AssistantResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
-  // Default avoids retired ids like gemini-1.5-flash-8b-001 (often 404 today).
-  const preferredModel = (process.env.GEMINI_MODEL ?? "gemini-2.0-flash").trim();
+  // Default to a 2.5 model — 2.0-flash and 1.5-flash are retired or quota-zero on many keys.
+  const preferredModel = (process.env.GEMINI_MODEL ?? "gemini-2.5-flash").trim();
 
   if (!apiKey) {
     return {
@@ -76,7 +76,7 @@ async function generateAssistantReply(params: {
     generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
   });
 
-  const tryModels = [preferredModel, "gemini-2.0-flash", "gemini-1.5-flash"].filter(
+  const tryModels = [preferredModel, "gemini-2.5-flash", "gemini-2.5-flash-lite"].filter(
     (m, i, a) => m.length > 0 && a.indexOf(m) === i,
   );
 
@@ -97,10 +97,12 @@ async function generateAssistantReply(params: {
       modelUsed = model;
       break;
     }
-    // Wrong model id is usually 404; retry next alias. Other errors: stop on last model.
+    // 404 = retired model id, 429 = quota for that model. Try the next alias.
     res = attempt;
     modelUsed = model;
-    if (attempt.status !== 404 || model === tryModels[tryModels.length - 1]) {
+    const isLast = model === tryModels[tryModels.length - 1];
+    const retryable = attempt.status === 404 || attempt.status === 429;
+    if (!retryable || isLast) {
       break;
     }
   }
