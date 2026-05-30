@@ -17,17 +17,43 @@ type AssistantResult = {
   devGemini?: { status: number; model: string; body: string };
 };
 
+function collectGeminiKeys(): string[] {
+  // Supported env shapes (any combination):
+  //   GEMINI_API_KEYS=key1,key2,key3   (comma-separated, primary)
+  //   GEMINI_API_KEY_1 / _2 / _3       (numbered slots)
+  //   GEMINI_API_KEY                   (legacy single)
+  const raw: string[] = [];
+  const list = process.env.GEMINI_API_KEYS;
+  if (list) raw.push(...list.split(","));
+  for (const suffix of ["_1", "_2", "_3"]) {
+    const v = process.env[`GEMINI_API_KEY${suffix}`];
+    if (v) raw.push(v);
+  }
+  if (process.env.GEMINI_API_KEY) raw.push(process.env.GEMINI_API_KEY);
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of raw) {
+    const trimmed = k.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out;
+}
+
 async function generateAssistantReply(params: {
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
   contextText?: string | null;
   contextFilename?: string | null;
 }): Promise<AssistantResult> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const keys = collectGeminiKeys();
   // Default to a 2.5 model — 2.0-flash and 1.5-flash are retired or quota-zero on many keys.
   const preferredModel = (process.env.GEMINI_MODEL ?? "gemini-2.5-flash").trim();
 
-  if (!apiKey) {
+  if (keys.length === 0) {
     return {
       text: (() => {
         const base = `Demo mode: I received your question: "${params.question}".\n\n`;
@@ -82,28 +108,55 @@ async function generateAssistantReply(params: {
 
   let res: Response | null = null;
   let modelUsed = preferredModel;
+  let keyIndexUsed = 0;
+  // 429 = quota exhausted for the key, 403 = key disabled / quota policy.
+  // Rotate to the next key on either. 404 = retired model id, rotate model instead.
+  const isQuotaError = (status: number) => status === 429 || status === 403;
 
-  for (const model of tryModels) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model,
-    )}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const attempt = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: payload,
-    });
-    if (attempt.ok) {
+  outer: for (const model of tryModels) {
+    let lastQuotaResponse: Response | null = null;
+    for (let i = 0; i < keys.length; i++) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        model,
+      )}:generateContent?key=${encodeURIComponent(keys[i]!)}`;
+      const attempt = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+
+      if (attempt.ok) {
+        res = attempt;
+        modelUsed = model;
+        keyIndexUsed = i;
+        break outer;
+      }
+
       res = attempt;
       modelUsed = model;
+      keyIndexUsed = i;
+
+      if (isQuotaError(attempt.status)) {
+        // Save and try the next key with the same model.
+        lastQuotaResponse = attempt;
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            `[api/chat] Gemini key #${i + 1} hit ${attempt.status} on ${model}, rotating.`,
+          );
+        }
+        continue;
+      }
+
+      // Non-quota error: rotating the key won't help. Try next model.
+      if (attempt.status === 404) break;
+      // Other errors (5xx, 400, etc.) — give up for this model.
       break;
     }
-    // 404 = retired model id, 429 = quota for that model. Try the next alias.
-    res = attempt;
-    modelUsed = model;
-    const isLast = model === tryModels[tryModels.length - 1];
-    const retryable = attempt.status === 404 || attempt.status === 429;
-    if (!retryable || isLast) {
-      break;
+
+    // If every key failed with a quota error on this model, preserve that response
+    // for the eventual error path so we report the most accurate failure.
+    if (lastQuotaResponse && (!res || !isQuotaError(res.status))) {
+      res = lastQuotaResponse;
     }
   }
 
@@ -111,7 +164,13 @@ async function generateAssistantReply(params: {
     const errorBody = await res!.text();
     const preview = errorBody.slice(0, 500);
     if (process.env.NODE_ENV === "development") {
-      console.error("[api/chat] Gemini error:", res!.status, modelUsed, preview);
+      console.error(
+        "[api/chat] Gemini error:",
+        res!.status,
+        modelUsed,
+        `key#${keyIndexUsed + 1}`,
+        preview,
+      );
     }
     return {
       text: `Demo mode: I couldn't reach the model right now. Your question was: "${params.question}".`,
@@ -119,6 +178,8 @@ async function generateAssistantReply(params: {
         mode: "demo_fallback",
         geminiStatus: res!.status,
         modelTried: modelUsed,
+        keyIndexTried: keyIndexUsed + 1,
+        keysAvailable: keys.length,
       },
       devGemini:
         process.env.NODE_ENV === "development"
@@ -144,7 +205,10 @@ async function generateAssistantReply(params: {
     };
   }
 
-  return { text, meta: { mode: "gemini" as const, model: modelUsed } };
+  return {
+    text,
+    meta: { mode: "gemini" as const, model: modelUsed, keyIndex: keyIndexUsed + 1 },
+  };
 }
 
 export async function POST(req: Request) {

@@ -48,6 +48,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [magicLoading, setMagicLoading] = useState(false);
 
   useEffect(() => {
     if (mode !== "login" || typeof window === "undefined") return;
@@ -56,7 +57,39 @@ export function AuthForm({ mode }: { mode: Mode }) {
       window.sessionStorage.removeItem("pending_email_verification");
       setNotice("Email verified. You can sign in now.");
     }
+    if (params.get("reset") === "1") {
+      setNotice("Password updated. Sign in with your new password.");
+    }
   }, [mode]);
+
+  async function onMagicLink() {
+    setError(null);
+    setNotice(null);
+
+    if (!email) {
+      setError("Enter your email above first, then tap the magic link button.");
+      return;
+    }
+
+    setMagicLoading(true);
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: emailRedirectTo ? { emailRedirectTo } : undefined,
+    });
+    setMagicLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    setNotice("Magic link sent. Check your email to finish signing in.");
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -133,9 +166,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
       </label>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Password
-        </span>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Password
+          </span>
+          {mode === "login" ? (
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+            >
+              Forgot password?
+            </Link>
+          ) : null}
+        </div>
         <div className="relative">
           <input
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-20 text-sm transition focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -193,6 +236,37 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </>
         )}
       </button>
+
+      {mode === "login" ? (
+        <>
+          <div className="relative flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-slate-400">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span>or</span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={onMagicLink}
+            disabled={magicLoading || loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 disabled:cursor-wait disabled:opacity-70"
+          >
+            {magicLoading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600" />
+                Sending magic link…
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                </svg>
+                Send me a magic link
+              </>
+            )}
+          </button>
+        </>
+      ) : null}
 
       <div className="text-center text-sm text-slate-600">
         {mode === "login" ? (
